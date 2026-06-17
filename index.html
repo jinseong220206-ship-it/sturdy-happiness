@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>세븐나이츠 리버스 길드전 예약 시스템 v12 (Realtime)</title>
+    <style>
+        body { background-color: #0f172a; color: #f8fafc; font-family: 'Malgun Gothic', sans-serif; margin: 0; padding: 20px; }
+        .container { max-width: 1400px; margin: 0 auto; display: flex; gap: 20px; flex-direction: column; }
+        @media (min-width: 1024px) { .container { flex-direction: row; } }
+        
+        /* 왼쪽 길드원 관리 및 종합 전적 현황판 */
+        .guild-sidebar { flex: 1; max-width: 100%; background-color: #1e293b; padding: 20px; border-radius: 12px; border: 1px solid #334155; height: fit-content; }
+        @media (min-width: 1024px) { .guild-sidebar { max-width: 440px; position: sticky; top: 20px; } }
+        
+        /* 관리자 인증 박스 */
+        .admin-lock-box { background-color: #0f172a; padding: 12px; border-radius: 8px; border: 1px solid #475569; margin-bottom: 15px; text-align: center; }
+        .lock-status { font-size: 13px; font-weight: bold; margin-bottom: 8px; display: block; }
+        .lock-status.locked { color: #f43f5e; }
+        .lock-status.unlocked { color: #22c55e; }
+        .input-pw { width: 80%; text-align: center; padding: 4px; font-size: 12px; margin-bottom: 4px; }
+        
+        /* 현황판 리스트 스타일 고도화 */
+        .member-status-list { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; max-height: 550px; overflow-y: auto; padding-right: 4px; }
+        .member-row { display: flex; align-items: center; justify-content: space-between; background-color: #0f172a; padding: 8px 10px; border-radius: 6px; border: 1px solid #334155; gap: 4px; }
+        .member-row.me { border-color: #0284c7; background-color: #0c1e36; }
+        .member-row.exhausted { opacity: 0.7; background-color: #1c1116; }
+        .input-name { width: 80px; background: transparent; border: none; color: white; font-size: 13px; font-weight: bold; }
+        .input-name:disabled { border-bottom: none; }
+        .input-name:not(:disabled) { border-bottom: 1px dashed #475569; text-align: center; }
+        
+        /* 비밀번호 입력창 (관리자 전용) */
+        .input-user-pw { width: 45px; text-align: center; background-color: #1e293b; border: 1px solid #64748b; color: #a78bfa; border-radius: 4px; padding: 1px; font-size: 11px; }
+
+        /* 스탯 박스 영역 */
+        .stat-group { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #cbd5e1; }
+        .stat-item { display: flex; align-items: center; gap: 2px; }
+        .input-stat { width: 26px; text-align: center; background-color: #1e293b; border: 1px solid #475569; border-radius: 4px; padding: 1px; font-size: 11px; font-weight: bold; }
+        .input-stat.t-count { color: #facc15; }
+        .input-stat.s-count { color: #38bdf8; }
+        .input-stat.f-count { color: #fb923c; }
+
+        .status-badge { font-size: 11px; padding: 2px 6px; border-radius: 4px; font-weight: bold; text-align: center; min-width: 42px; }
+        .status-badge.avail { background-color: #1e3a8a; color: #38bdf8; }
+        .status-badge.empty { background-color: #4c0519; color: #f43f5e; }
+        
+        /* 오른쪽 메인 콘텐츠 */
+        .main-content { flex: 3; }
+        
+        header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #334155; padding-bottom: 20px; margin-bottom: 25px; }
+        h1 { color: #facc15; margin: 0; font-size: 24px; }
+        .nickname-box { display: flex; align-items: center; gap: 10px; background: #1e293b; padding: 8px 16px; border-radius: 8px; border: 1px solid #334155; }
+        .user-badge { background-color: #0284c7; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 13px; }
+        .logout-btn { background: #475569; border: none; color: white; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px; }
+        .logout-btn:hover { background: #f43f5e; }
+        
+        input, select { background-color: #0f172a; border: 1px solid #475569; color: white; padding: 6px 10px; border-radius: 6px; outline: none; font-size: 14px; }
+        input:focus, select:focus { border-color: #facc15; }
+        
+        .tab-section { margin-bottom: 25px; }
+        .tab-group { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 15px; }
+        .tab-label { font-size: 14px; font-weight: bold; color: #94a3b8; width: 100%; margin-bottom: 5px; }
+        .tab-btn { background-color: #1e293b; border: 1px solid #334155; color: #cbd5e1; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: bold; }
+        .tab-btn.active.outer { background-color: #0284c7; color: white; border-color: #38bdf8; }
+        .tab-btn.active.inner { background-color: #7c3aed; color: white; border-color: #a78bfa; }
+        .tab-btn.active.main { background-color: #dc2626; color: white; border-color: #f87171; }
+
+        .current-title { font-size: 20px; font-weight: bold; margin-bottom: 20px; padding-left: 10px; border-left: 5px solid #facc15; }
+        .grid { display: grid; grid-template-cols: repeat(auto-fill, minmax(280px, 1fr)); gap: 15px; }
+        
+        .card { background-color: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 16px; box-shadow: 0 4px 6px rgba(0,0,0,0.2); display: flex; flex-direction: column; justify-content: space-between; }
+        .card.reserved { border: 1px solid #eab308; background-color: #1c1917; }
+        .card.fail { border: 1px solid #f97316; background-color: #2a1b10; }
+        .card.done { border: 1px solid #dc2626; background-color: #180505; opacity: 0.7; }
+        
+        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+        .castle-name { font-weight: bold; font-size: 16px; color: #f1f5f9; }
+        
+        .badge { font-size: 11px; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
+        .badge.ready { background-color: #22c55e; color: #000; }
+        .badge.ing { background-color: #eab308; color: #000; }
+        .badge.fail { background-color: #f97316; color: #000; }
+        .badge.done { background-color: #dc2626; color: #fff; }
+        
+        .info-row { background-color: #0f172a; padding: 8px; border-radius: 6px; margin-bottom: 6px; font-size: 13px; display: flex; align-items: center; justify-content: space-between; }
+        .info-label { color: #94a3b8; font-size: 12px; }
+        .input-defender { width: 120px; text-align: right; background: transparent; border: none; border-bottom: 1px dashed #475569; color: white; }
+        .input-defender:disabled, .input-failcount:disabled { color: #64748b; border-color: transparent; cursor: not-allowed; }
+        .input-failcount { width: 50px; text-align: center; background-color: #1e293b; border: 1px solid #475569; color: #f97316; font-weight: bold; border-radius: 4px; padding: 2px; }
+        
+        .name-text { font-weight: bold; }
+
+        .btn { width: 100%; background-color: #2563eb; color: white; border: none; padding: 8px; border-radius: 6px; font-weight: bold; cursor: pointer; margin-top: 10px; }
+        .btn:hover { background-color: #1d4ed8; }
+        .btn-group-3 { display: flex; gap: 6px; margin-top: 10px; }
+        .btn-3 { flex: 1; border: none; padding: 8px 4px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 12px; color: white; }
+        .btn-success { background-color: #dc2626; }
+        .btn-failure { background-color: #ea580c; }
+        .btn-cancel { background-color: #475569; }
+    </style>
+
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
+</head>
+<body>
+
+<div class="container">
+    <div class="guild-sidebar">
+        <h3 style="margin: 0; color: #facc15; font-size: 16px; border-bottom: 1px solid #334155; padding-bottom: 10px;">👥 길드원 보안 현황판</h3>
+        
+        <div class="admin-lock-box">
+            <span id="lock-icon" class="lock-status locked">🔒 명단 잠김 (수정 불가)</span>
+            <input type="password" id="admin-password" class="input-pw" placeholder="관리자 비번 입력" oninput="checkPassword(this.value)">
+        </div>
+
+        <div class="member-status-list" id="member-status-container"></div>
+    </div>
+
+    <div class="main-content">
+        <header>
+            <div>
+                <h1>⚔️ 세븐나이츠 리버스 길드전</h1>
+                <div style="color: #94a3b8; font-size: 12px; margin-top: 4px;">Firebase 실시간 동기화 보안 버전 v13</div>
+            </div>
+            <div class="nickname-box">
+                <span style="font-size: 13px; color:#94a3b8;">접속자:</span>
+                <span class="user-badge" id="current-user-display">로딩 중...</span>
+                <button class="logout-btn" onclick="logout()">계정 전환</button>
+            </div>
+        </header>
+
+        <div class="tab-section">
+            <div class="tab-label">🛡️ 외성 구역 (각 10개 덱)</div>
+            <div class="tab-group">
+                <button class="tab-btn active outer" onclick="switchCastle('외성 1번')">외성 1번</button>
+                <button class="tab-btn outer" onclick="switchCastle('외성 2번')">외성 2번</button>
+                <button class="tab-btn outer" onclick="switchCastle('외성 3번')">외성 3번</button>
+                <button class="tab-btn outer" onclick="switchCastle('외성 4번')">외성 4번</button>
+                <button class="tab-btn outer" onclick="switchCastle('외성 5번')">외성 5번</button>
+            </div>
+            <div class="tab-label">🏰 내성 구역 (각 15개 덱)</div>
+            <div class="tab-group">
+                <button class="tab-btn inner" onclick="switchCastle('내성 1번')">내성 1번</button>
+                <button class="tab-btn inner" onclick="switchCastle('내성 2번')">내성 2번</button>
+                <button class="tab-btn inner" onclick="switchCastle('내성 3번')">내성 3번</button>
+            </div>
+            <div class="tab-label">👑 본성 구역 (20개 덱)</div>
+            <div class="tab-group">
+                <button class="tab-btn main" onclick="switchCastle('본성')">본성 (주성)</button>
+            </div>
+        </div>
+
+        <div class="current-title" id="current-castle-title">외성 1번 방어덱 현황</div>
+        <div class="grid" id="deck-grid"></div>
+    </div>
+</div>
+
+<script>
+    // ----------------------------------------------------
+    // ⚠️ [필수 설정] 여기에 본인의 파이어베이스 정보를 입력하세요!
+    // ----------------------------------------------------
+    const firebaseConfig = {
+        apiKey: "YOUR_API_KEY",
+        authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+        databaseURL: "https://YOUR_PROJECT_ID-default-rtdb.firebaseio.com",
+        projectId: "YOUR_PROJECT_ID",
+        storage
