@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>세븐나이츠 리버스 길드전 통합 시스템 v28 (Firebase 실시간)</title>
+    
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+    
+    <script>
+        // 요청하신 새로운 Firebase 프로젝트 설정값 적용 완료
+        const firebaseConfig = {
+            apiKey: "AIzaSyA3BciIass00djmVOY45ROuCjc3e_NG7UY",
+            authDomain: "chch-a5eff.firebaseapp.com",
+            projectId: "chch-a5eff",
+            storageBucket: "chch-a5eff.firebasestorage.app",
+            messagingSenderId: "723268515126",
+            appId: "1:723268515126:web:e28b030c2756a5fca7af97",
+            measurementId: "G-YELVEN6CET",
+            // 데이터베이스 리전에 따라 주소가 다를 수 있으니 연동이 안 되면 콘솔에서 확인 후 수정하세요!
+            databaseURL: "https://chch-a5eff-default-rtdb.firebaseio.com"
+        };
+        
+        // Firebase 초기화 및 데이터베이스 참조 생성
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+    </script>
+
+    <style>
+        body { background-color: #0f172a; color: #f8fafc; font-family: 'Malgun Gothic', sans-serif; margin: 0; padding: 20px; }
+        .container { max-width: 1400px; margin: 0 auto; display: flex; gap: 20px; flex-direction: column; }
+        @media (min-width: 1024px) { .container { flex-direction: row; } }
+        
+        /* 왼쪽 사이드바 */
+        .guild-sidebar { flex: 1; max-width: 100%; background-color: #1e293b; padding: 20px; border-radius: 12px; border: 1px solid #334155; height: fit-content; }
+        @media (min-width: 1024px) { .guild-sidebar { max-width: 460px; position: sticky; top: 20px; } }
+        
+        /* 관리자 박스 */
+        .admin-lock-box { background-color: #0f172a; padding: 12px; border-radius: 8px; border: 1px solid #475569; margin-bottom: 15px; text-align: center; }
+        .lock-status { font-size: 13px; font-weight: bold; margin-bottom: 8px; display: block; }
+        .lock-status.locked { color: #f43f5e; }
+        .lock-status.unlocked { color: #22c55e; }
+        .input-pw { width: 80%; text-align: center; padding: 4px; font-size: 12px; margin-bottom: 4px; background: #1e293b; border: 1px solid #475569; color: white; }
+        
+        /* 현황판 리스트 */
+        .member-status-list { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; max-height: 550px; overflow-y: auto; padding-right: 4px; }
+        .member-row { display: flex; align-items: center; justify-content: space-between; background-color: #0f172a; padding: 8px 10px; border-radius: 6px; border: 1px solid #334155; gap: 4px; }
+        .member-row.me { border-color: #0284c7; background-color: #0c1e36; }
+        .member-row.exhausted { opacity: 0.7; background-color: #1c1116; }
+        .input-name { width: 75px; background: transparent; border: none; color: white; font-size: 13px; font-weight: bold; }
+        .input-name:not(:disabled) { border-bottom: 1px dashed #475569; text-align: center; }
+        
+        .input-user-pw { width: 40px; text-align: center; background-color: #1e293b; border: 1px solid #64748b; color: #a78bfa; border-radius: 4px; padding: 1px; font-size: 11px; }
+        .stat-group { display: flex; align-items: center; gap: 5px; font-size: 11px; color: #cbd5e1; }
+        .stat-item { display: flex; align-items: center; gap: 2px; }
+        .input-stat { width: 24px; text-align: center; background-color: #1e293b; border: 1px solid #475569; border-radius: 4px; padding: 1px; font-size: 11px; font-weight: bold; }
+        .input-stat.t-count { color: #facc15; }
+        .input-stat.s-count { color: #38bdf8; }
+        .input-stat.f-count { color: #f97316; }
+
+        .status-badge { font-size: 11px; padding: 2px 4px; border-radius: 4px; font-weight: bold; text-align: center; min-width: 38px; }
+        .status-badge.avail { background-color: #1e3a8a; color: #38bdf8; }
+        .status-badge.empty { background-color: #4c0519; color: #f43f5e; }
+        
+        /* 오른쪽 메인 */
+        .main-content { flex: 3; }
+        header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #334155; padding-bottom: 20px; margin-bottom: 20px; }
+        h1 { color: #facc15; margin: 0; font-size: 24px; }
+        .nickname-box { display: flex; align-items: center; gap: 10px; background: #1e293b; padding: 8px 16px; border-radius: 8px; border: 1px solid #334155; }
+        .user-badge { background-color: #0284c7; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 13px; }
+        .logout-btn { background: #475569; border: none; color: white; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px; }
+        .logout-btn:hover { background: #f43f5e; }
+
+        /* 메인 전환 탭 */
+        .main-tab-bar { display: flex; gap: 10px; margin-bottom: 25px; border-bottom: 2px solid #334155; padding-bottom: 12px; }
+        .main-tab-btn { flex: 1; background-color: #1e293b; border: 1px solid #475569; color: #94a3b8; padding: 12px; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; text-align: center; }
+        .main-tab-btn.active.reserve { background-color: #2563eb; color: white; border-color: #3b82f6; box-shadow: 0 0 10px rgba(37,99,235,0.3); }
+        .main-tab-btn.active.jokbo { background-color: #eab308; color: #000; border-color: #facc15; box-shadow: 0 0 10px rgba(234,179,8,0.3); }
+
+        /* 독립형 족보 디자인 */
+        .jokbo-window { background: #1e293b; padding: 20px; border-radius: 12px; border: 1px solid #eab308; display: flex; flex-direction: column; gap: 15px; }
+        .jokbo-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed #475569; padding-bottom: 10px; }
+        .jokbo-grid { display: grid; grid-template-cols: repeat(auto-fill, minmax(360px, 1fr)); gap: 14px; max-height: 400px; overflow-y: auto; padding-right: 5px; }
+        .jokbo-card { background: #0f172a; border: 1px solid #334155; padding: 14px; border-radius: 8px; font-size: 13px; position: relative; display: flex; flex-direction: column; gap: 8px; }
+        
+        .jokbo-card .del-btn { position: absolute; top: 8px; right: 8px; background: none; border: none; color: #64748b; cursor: pointer; font-size: 12px; z-index: 10; }
+        .jokbo-card .del-btn:hover { color: #f43f5e; }
+        .jokbo-card .edit-btn { position: absolute; top: 8px; right: 35px; background: none; border: none; color: #38bdf8; cursor: pointer; font-size: 12px; z-index: 10; }
+        .jokbo-card .edit-btn:hover { color: #0284c7; }
+        
+        .jokbo-tag { font-size: 11px; padding: 2px 6px; border-radius: 4px; font-weight: bold; display: inline-block; vertical-align: middle; }
+        .tag-enemy { background-color: #4c0519; color: #f43f5e; }
+        .tag-counter { background-color: #064e3b; color: #34d399; }
+        
+        /* 영웅 가로 배치 레이아웃 */
+        .jokbo-hero-flex { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 5px; background: #1e293b; padding: 6px; border-radius: 6px; min-height: 52px; align-items: center; }
+        .jokbo-hero-mini { position: relative; width: 48px; height: 48px; background: #0f172a; border-radius: 6px; overflow: hidden; border: 1px solid #475569; box-shadow: 0 2px 4px rgba(0,0,0,0.4); }
+        .jokbo-hero-mini img { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .jokbo-hero-mini .mini-name { position: absolute; bottom: 0; left: 0; width: 100%; background: rgba(0,0,0,0.8); color: #fff; font-size: 9px; text-align: center; padding: 1px 0; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+        /* 영웅 스토리지 레이아웃 */
+        .storage-section { background: #1e293b; border: 2px solid #64748b; border-radius: 12px; padding: 18px; margin-top: 25px; box-shadow: 0 4px 15px rgba(0,0,0,0.4); }
+        .storage-title { font-size: 15px; font-weight: bold; color: #facc15; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+        .hero-pool-grid { display: flex; flex-wrap: wrap; gap: 10px; max-height: 250px; overflow-y: auto; padding: 10px; background: #0f172a; border-radius: 6px; }
+        
+        .hero-visual-card { position: relative; width: 76px; background: #0f172a; border: 2px solid #475569; border-radius: 8px; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+        .hero-img-box { position: relative; width: 100%; height: 76px; background-color: #334155; }
+        .hero-img-box img { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .hero-name-overlay { position: absolute; bottom: 0; left: 0; width: 100%; background: rgba(0, 0, 0, 0.75); color: #fff; font-size: 11px; text-align: center; padding: 3px 0; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        
+        .hero-card-btns { display: flex; border-top: 1px solid #475569; width: 100%; }
+        .hero-card-btn { flex: 1; border: none; padding: 5px 0; font-size: 10px; font-weight: bold; cursor: pointer; color: white; text-align: center; outline: none; }
+        .hero-card-btn.def { background-color: #ef4444; }
+        .hero-card-btn.def:hover { background-color: #b91c1c; }
+        .hero-card-btn.atk { background-color: #10b981; color: #0f172a; }
+        .hero-card-btn.atk:hover { background-color: #047857; color: white; }
+
+        .hero-admin-ctrl { position: absolute; top: 2px; width: 18px; height: 18px; border-radius: 4px; border: none; font-size: 10px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; color: white; z-index: 5; box-shadow: 0 2px 4px rgba(0,0,0,0.5); }
+        .hero-admin-ctrl.edit { left: 2px; background: #0284c7; }
+        .hero-admin-ctrl.del { right: 2px; background: #dc2626; }
+
+        .jokbo-creator-box { background: #0f172a; padding: 15px; border-radius: 8px; border: 1px solid #475569; display: flex; flex-direction: column; gap: 12px; }
+        .deck-builder-row { display: flex; flex-direction: column; gap: 8px; }
+        @media (min-width: 768px) { .deck-builder-row { flex-direction: row; } }
+        .builder-field { flex: 1; background: #1e293b; padding: 10px; border-radius: 6px; border: 1px solid #334155; position: relative; }
+        .builder-field label { font-size: 11px; color: #94a3b8; display: block; margin-bottom: 5px; }
+
+        input, select { background-color: #0f172a; border: 1px solid #475569; color: white; padding: 6px 10px; border-radius: 6px; outline: none; font-size: 14px; }
+        input:focus, select:focus { border-color: #facc15; }
+        
+        .tab-section { margin-bottom: 25px; }
+        .tab-group { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 15px; }
+        .tab-label { font-size: 14px; font-weight: bold; color: #94a3b8; width: 100%; margin-bottom: 5px; }
+        .tab-btn { background-color: #1e293b; border: 1px solid #334155; color: #cbd5e1; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: bold; }
+        .tab-btn.active.outer { background-color: #0284c7; color: white; border-color: #38bdf8; }
+        .tab-btn.active.inner { background-color: #7c3aed; color: white; border-color: #a78bfa; }
+        .tab-btn.active.main { background-color: #dc2626; color: white; border-color: #f87171; }
+
+        .current-title { font-size: 20px; font-weight: bold; padding-left: 10px; border-left: 5px solid #2563eb; }
+        .grid { display: grid; grid-template-cols: repeat(auto-fill, minmax(290px, 1fr)); gap: 15px; }
+        
+        .card { background-color: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 16px; display: flex; flex-direction: column; justify-content: space-between; transition: all 0.2s ease; }
+        .card.reserved { border: 1px solid #eab308; background-color: #1c1917; }
+        .card.fail { border: 1px solid #f97316; background-color: #2a1b10; }
+        .card.done { border: 1px solid #dc2626; background-color: #180505; opacity: 0.7; }
+        .card.selected-deck-target { border: 2px solid #38bdf8 !important; box-shadow: 0 0 14px rgba(56, 189, 248, 0.7); background-color: #0c1e36 !important; }
+        
+        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+        .castle-name { font-weight: bold; font-size: 16px; color: #f1f5f9; }
+        
+        .badge { font-size: 11px; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
+        .badge.ready { background-color: #22c55e; color: #000; }
+        .badge.ing { background-color: #eab308; color: #000; }
+        .badge.fail { background-color: #f97316; color: #000; }
+        .badge.done { background-color: #dc2626; color: #fff; }
+        
+        .info-row { background-color: #0f172a; padding: 8px; border-radius: 6px; margin-bottom: 6px; font-size: 13px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+        .info-label { color: #94a3b8; font-size: 12px; }
+        .input-defender, .input-owner { background-color: #1e293b; border: 1px solid #475569; border-radius: 4px; color: white; padding: 4px 6px; font-size: 12px; }
+        .input-defender:disabled, .input-owner:disabled, .input-failcount:disabled { color: #64748b; border-color: transparent; cursor: not-allowed; background: transparent; }
+        .input-failcount { width: 50px; text-align: center; background-color: #1e293b; border: 1px solid #475569; color: #f97316; font-weight: bold; border-radius: 4px; padding: 2px; }
+        
+        .name-text { font-weight: bold; }
+
+        .btn { width: 100%; background-color: #2563eb; color: white; border: none; padding: 8px; border-radius: 6px; font-weight: bold; cursor: pointer; margin-top: 10px; }
+        .btn:hover { background-color: #1d4ed8; }
+        .btn-group-3 { display: flex; gap: 6px; margin-top: 10px; }
+        .btn-3 { flex: 1; border: none; padding: 8px 4px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 12px; color: white; }
+        .btn-success { background-color: #dc2626; }
+        .btn-failure { background-color: #ea580c; }
+        .btn-cancel { background-color: #475569; }
+        
+        #loading-screen { position: fixed; top:0; left:0; width:100%; height:100%; background:#0f172a; display:flex; justify-content:center; align-items:center; z-index:9999; font-size:20px; color:#facc15; font-weight:bold; }
+        
+        #custom-login-modal { position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(15,23,42,0.98); display:none; justify-content:center; align-items:center; z-index:99999; }
+        .login-box { background:#1e293b; padding:30px; border-radius:12px; border:2px solid #2563eb; width:340px; text-align:center; box-shadow:0 10px 25px rgba(0,0,0,0.5); }
+        .login-field { margin-bottom:15px; text-align:left; }
+        .login-field label { font-size:12px; color:#94a3b8; display:block; margin-bottom:6px; }
+        .login-field select, .login-field input { width:100%; box-sizing:border-box; padding:10px; font-size:14px; }
+        .login-error { color:#f43f5e; font-size:12px; margin-top:10px; min-height:18px; font-weight:bold; }
+    </style>
+</head>
+<body>
+
+<div id="loading-screen">데이터 실시간 동기화 중...</div>
+
+<div id="custom-login-modal">
+    <div class="login-box">
+        <h2 style="color:#2563eb; margin-top:0; margin-bottom:6px; font-size:20px;">⚔️ 길드 통합 시스템 로그인</h2>
+        <p style="color:#94a3b8; font-size:11px; margin-bottom:20px;">닉네임을 선택하고 비밀번호를 입력하세요.</p>
+        
+        <div class="login-field">
+            <label>길드원 선택</label>
+            <select id="login-username-select"></select>
+        </div>
+        <div class="login-field">
+            <label>비밀번호 (초기: 0000)</label>
+            <input type="password" id="login-password" placeholder="비밀번호 입력">
+        </div>
+        
+        <button onclick="handleWebLogin()" style="width:100%; background:#2563eb; color:white; border:none; padding:12px; border-radius:6px; font-weight:bold; cursor:pointer; font-size:14px; margin-top:5px;">입장하기</button>
+        <div class="login-error" id="login-error-msg"></div>
+    </div>
+</div>
+
+<div class="container">
+    <div class="guild-sidebar">
+        <h3 style="margin: 0; color: #facc15; font-size: 16px; border-bottom: 1px solid #334155; padding-bottom: 10px;">👥 길드원 현황</h3>
+        
+        <div class="admin-lock-box">
+            <span id="lock-icon" class="lock-status locked">🔒 명단 편집 잠김</span>
+            <input type="password" id="admin-password" class="input-pw" placeholder="관리자 비밀번호 입력" oninput="checkPassword(this.value)">
+        </div>
+
+        <div class="member-status-list" id="member-status-container"></div>
+        <button onclick="addGuildMemberSlot()" style="width:100%; background:#475569; color:#f8fafc; border:1px dashed #94a3b8; padding:8px; border-radius:6px; font-weight:bold; cursor:pointer; font-size:12px; margin-top:10px;">➕ 길드원 빈 칸(슬롯) 추가</button>
+    </div>
+
+    <div class="main-content">
+        <header>
+            <div>
+                <h1>⚔️ 세븐나이츠 리버스 길드전</h1>
+                <div style="color: #94a3b8; font-size: 12px; margin-top: 4px;">웹 브라우저 Firebase 실시간 데이터 보드 v28</div>
+            </div>
+            <div class="nickname-box">
+                <span style="font-size: 13px; color:#94a3b8;">접속자:</span>
+                <span class="user-badge" id="current-user-display">로딩 중...</span>
+                <button class="logout-btn" onclick="logout()">로그아웃</button>
+            </div>
+        </header>
+
+        <div class="main-tab-bar">
+            <button class="main-tab-btn active reserve" id="tab-nav-reserve" onclick="switchMainTab('reserve')">⚔️ 길드전 예약 현황판</button>
+            <button class="main-tab-btn jokbo" id="tab-nav-jokbo" onclick="switchMainTab('jokbo')">📋 공략 및 카운터 족보 창</button>
+        </div>
+
+        <div id="window-reservation">
+            <div class="tab-section">
+                <div class="tab-label">🛡️ 외성 구역 (각 10개 덱)</div>
+                <div class="tab-group">
+                    <button class="tab-btn active outer" onclick="switchCastle('외성 1번')">외성 1번</button>
+                    <button class="tab-btn outer" onclick="switchCastle('외성 2번')">외성 2번</button>
+                    <button class="tab-btn outer" onclick="switchCastle('외성 3번')">외성 3번</button>
+                    <button class="tab-btn outer" onclick="switchCastle('외성 4번')">외성 4번</button>
+                    <button class="tab-btn outer" onclick="switchCastle('외성 5번')">외성 5번</button>
+                </div>
+                <div class="tab-label">🏰 내성 구역 (각 15개 덱)</div>
+                <div class="tab-group">
+                    <button class="tab-btn inner" onclick="switchCastle('내성 1번')">내성 1번</button>
+                    <button class="tab-btn inner" onclick="switchCastle('내성 2번')">내성 2번</button>
+                    <button class="tab-btn inner" onclick="switchCastle('내성 3번')">내성 3번</button>
+                </div>
+                <div class="tab-label">👑 본성 구역 (20개 덱)</div>
+                <div class="tab-group">
+                    <button class="tab-btn main" onclick="switchCastle('본성')">본성 (주성)</button>
+                </div>
+            </div>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <div class="current-title" id="current-castle-title" style="margin-bottom: 0;">외성 1번 방어덱 현황</div>
+                <button onclick="resetAllDecks()" style="background-color: #dc2626; color: white; border: none; padding: 8px 14px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 12px;">🔄 새 시즌 초기화 (횟수/공격/방어덱)</button>
+            </div>
+
+            <div class="grid" id="deck-grid"></div>
+        </div>
+
+        <div id="window-jokbo" style="display: none;">
+            <div class="jokbo-window">
+                <div class="jokbo-header">
+                    <div style="font-size: 18px; font-weight: bold; color: #facc15;">📋 실시간 상대 덱 카운터 족보 보관함</div>
+                    <input type="text" id="jokbo-search" placeholder="🔍 영웅 이름으로 검색..." oninput="drawJokbo()" style="font-size: 13px; padding: 6px 12px; width: 220px;">
+                </div>
+                <div class="jokbo-grid" id="jokbo-grid-container"></div>
+                <div class="jokbo-creator-box">
+                    <div class="deck-builder-row">
+                        <div class="builder-field"><label>🛡️ 상대 방어덱 영웅</label><input type="text" id="input-enemy-names" placeholder="예: 루디 에반 카린"></div>
+                        <div class="builder-field"><label>⚔️ 추천 카운터 영웅</label><input type="text" id="input-counter-names" placeholder="예: 델론즈 주피"></div>
+                    </div>
+                    <input type="text" id="add-tips" placeholder="💡 공략 기믹/팁 입력">
+                    <button class="btn" onclick="addJokboRecord()" style="background:#eab308; color:#000;">조합 확정 및 족보 등록</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="storage-section">
+            <div class="storage-title">
+                <span style="color:#38bdf8;">🛠️ 영웅 일러스트 스토리지</span>
+                <div style="display:flex; gap:6px;">
+                    <input type="text" id="storage-hero-search" placeholder="🔍 영웅 검색..." oninput="drawHeroStorage()" style="width:100px; padding:4px; font-size:12px;">
+                    <input type="text" id="new-hero-name" placeholder="이름..." style="width:80px;">
+                    <input type="text" id="new-hero-img" placeholder="이미지 URL..." style="width:120px;">
+                    <button onclick="addHeroToStoragePool()" style="background:#0284c7; color:white; border:none; padding:3px 8px; border-radius:4px; font-weight:bold; cursor:pointer;">추가</button>
+                </div>
+            </div>
+            <div class="hero-pool-grid" id="hero-storage-pool-container"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const REAL_ADMIN_PASSWORD = "2748"; 
+    let isAdminMode = false; 
+    let currentCastle = '외성 1번';
+    let selectedDeckId = null; 
+    let guildMembers = [];
+    let DecksData = []; 
+    let JokboData = [];
+    let HeroStorage = []; 
+    
+    // 접속 유저는 기기 고유 상태이므로 로컬스토리지 유지
+    let currentUser = localStorage.getItem('skr_current_user') || "";
+
+    const DEFAULT_HERO_NAMES = [
+        "루디", "에반", "카린", "헬레nia", "델론즈", "아리엘", "주피", "백룡", 
+        "제이브", "아일린", "태오", "스파이크", "소이", "발리스타", "에이스", "여포", 
+        "린", "손오공", "크리스", "레이첼", "세인", "풍연", "밍밍"
+    ];
+
+    function generateInitialDecks() {
+        let idCounter = 1;
+        let initialDecks = [];
+        for (let c = 1; c <= 5; c++) { for (let d = 1; d <= 10; d++) initialDecks.push({ id: idCounter++, castleName: `외성 ${c}번`, deckNum: `${d}번 덱`, status: '대기중', defender: '', owner: '', attacker: '', failCount: 0 }); }
+        for (let c = 1; c <= 3; c++) { for (let d = 1; d <= 15; d++) initialDecks.push({ id: idCounter++, castleName: `내성 ${c}번`, deckNum: `${d}번 덱`, status: '대기중', defender: '', owner: '', attacker: '', failCount: 0 }); }
+        for (let d = 1; d <= 20; d++) initialDecks.push({ id: idCounter++, castleName: `본성`, deckNum: `${d}번 덱`, status: '대기중', defender: '', owner: '', attacker: '', failCount: 0 });
+        return initialDecks;
+    }
+
+    function generateInitialJokbo() {
+        return [
+            { id: 1, enemy: "루디 에반 카린 헬레니아", counter: "델론즈 아리엘 주피 백룡", tips: "방깎 위주 구성, 루디 신준 타이밍에 아리엘 턴감 스킬 필수 연계", author: "시스템" }
+        ];
+    }
+
+    // Firebase 데이터베이스 실시간 구독 로드 함수
+    function loadFirebaseDatabase() {
+        db.ref('guildData').on('value', (snapshot) => {
+            const data = snapshot.val() || {};
+            
+            // 1. 멤버 정보 로드 및 검증
+            guildMembers = data.members || [];
+            if (!Array.isArray(guildMembers) || guildMembers.length === 0) {
+                guildMembers = Array(30).fill(null).map(() => ({ name: "", password: "0000", tickets: 5, success: 0, fail: 0 }));
+                guildMembers[0].name = "길드원1"; guildMembers[1].name = "길드원2";
+            }
+            guildMembers.forEach(m => { if(m.fail === undefined) m.fail = 0; });
+
+            // 2. 덱 정보 로드
+            DecksData = data.decks || [];
+            if (!Array.isArray(DecksData) || DecksData.length === 0) { 
+                DecksData = generateInitialDecks();
+            }
+
+            // 3. 족보 정보 로드
+            JokboData = data.jokbo || [];
+            if (!Array.isArray(JokboData)) { JokboData = generateInitialJokbo(); }
+
+            // 4. 영웅 스토리지 로드
+            HeroStorage = data.heroStorage || [];
+            if (!Array.isArray(HeroStorage) || HeroStorage.length === 0 || typeof HeroStorage[0] === 'string') {
+                HeroStorage = DEFAULT_HERO_NAMES.map((name, idx) => ({
+                    id: Date.now() + idx,
+                    name: name,
+                    img: `https://placehold.co/76x76/2563eb/ffffff?text=${encodeURIComponent(name)}`
+                }));
+            }
+
+            // 모든 데이터 동기화 완료 후 UI 업데이트
+            document.getElementById('loading-screen').style.display = 'none';
+            drawSidebar();
+            drawDecks();
+            drawJokbo();
+            drawHeroStorage();
+            updateLoginSelectOptions();
+            checkAuthStatus();
+        }, (error) => {
+            console.error("Firebase 데이터 리드 실패:", error);
+            alert("실시간 데이터를 연동하는 중 실패했습니다. Firebase 리얼타임 데이터베이스 규칙 설정을 확인해 주세요.");
+        });
+    }
+
+    // 각 저장 함수를 Firebase 실시간 쓰기 명령으로 전면 수정
+    function saveMembers() { db.ref('guildData/members').set(guildMembers); }
+    function saveToStorage() { db.ref('guildData/decks').set(DecksData); }
+    function saveJokbo() { db.ref('guildData/jokbo').set(JokboData); }
+    function saveHeroStorage() { db.ref('guildData/heroStorage').set(HeroStorage); }
+
+    window.addEventListener('DOMContentLoaded', () => { loadFirebaseDatabase(); });
+
+    function switchMainTab(tabName) {
+        const btnReserve = document.getElementById('tab-nav-reserve');
+        const btnJokbo = document.getElementById('tab-nav-jokbo');
+        const winReserve = document.getElementById('window-reservation');
+        const winJokbo = document.getElementById('window-jokbo');
+
+        btnReserve.classList.remove('active');
+        btnJokbo.classList.remove('active');
+
+        if (tabName === 'reserve') {
+            btnReserve.classList.add('active');
+            winReserve.style.display = 'block';
+            winJokbo.style.display = 'none';
+        } else {
+            btnJokbo.classList.add('active');
+            winReserve.style.display = 'none';
+            winJokbo.style.display = 'block';
+            drawJokbo();
+        }
+    }
+
+    function drawHeroStorage() {
+        const container = document.getElementById('hero-storage-pool-container');
+        if (!container) return;
+        container.innerHTML = '';
+
+        const searchInput = document.getElementById('storage-hero-search');
+        const filterKeyword = searchInput ? searchInput.value.trim().toLowerCase() : '';
+        
+        const filteredHeroes = HeroStorage.filter(h => h.name.toLowerCase().includes(filterKeyword));
+
+        if (filteredHeroes.length === 0) {
+            container.innerHTML = `<span style="color:#64748b; font-size:11px; padding:5px;">일치하는 컬렉션 영웅이 없습니다. 관리자 권한으로 등록해보세요.</span>`;
+            return;
+        }
+
+        filteredHeroes.forEach(hero => {
+            let adminControls = '';
+            if (isAdminMode) {
+                adminControls = `
+                    <button class="hero-admin-ctrl edit" title="영웅 데이터 수정" onclick="editHeroInStorage(${hero.id})">✏️</button>
+                    <button class="hero-admin-ctrl del" title="영웅 영구 삭제" onclick="deleteHeroFromStorage(${hero.id})">✖</button>
+                `;
+            }
+
+            container.innerHTML += `
+                <div class="hero-visual-card">
+                    ${adminControls}
+                    <div class="hero-img-box">
+                        <img src="${hero.img}" alt="${hero.name}" onerror="this.src='https://placehold.co/76x76/334155/ffffff?text=${encodeURIComponent(hero.name)}'">
+                        <div class="hero-name-overlay">${hero.name}</div>
+                    </div>
+                    <div class="hero-card-btns">
+                        <button class="hero-card-btn def" title="방어팀/지정성채 추가" onclick="pushHeroToBuilderField('${hero.name}', 'enemy')">+🛡️</button>
+                        <button class="hero-card-btn atk" title="공격팀 추가" onclick="pushHeroToBuilderField('${hero.name}', 'counter')">+⚔️</button>
+                    </div>
+                </div>`;
+        });
+    }
+
+    function addHeroToStoragePool() {
+        if (!isAdminMode) { alert(`❌ 권한 거부: 스토리지 영웅 데이터 조작은 관리자만 가능합니다.`); return; }
+        const nameInput = document.getElementById('new-hero-name');
+        const imgInput = document.getElementById('new-hero-img');
+        const name = nameInput.value.trim();
+        let img = imgInput.value.trim();
+
+        if (!name) { alert("영웅 이름을 기입해 주세요."); return; }
+        if (HeroStorage.some(h => h.name === name)) { alert("이미 동일한 이름의 영웅 카드가 존재합니다."); return; }
+        if (!img) { img = `https://placehold.co/76x76/2563eb/ffffff?text=${encodeURIComponent(name)}`; }
+
+        HeroStorage.push({ id: Date.now(), name: name, img: img });
+        saveHeroStorage();
+        nameInput.value = ''; imgInput.value = '';
+    }
+
+    function editHeroInStorage(id) {
+        if (!isAdminMode) return;
+        const hero = HeroStorage.find(h => h.id === id); if (!hero) return;
+        const newName = prompt(`📝 [영웅 이름 수정]\n영웅의 새로운 이름을 입력하세요:`, hero.name);
+        if (newName === null || !newName.trim()) return;
+        const newImg = prompt(`🖼️ [초상화 이미지 주입]\n수정할 웹 이미지 주소(URL)를 넣어주세요:`, hero.img);
+        if (newImg === null) return;
+        hero.name = newName.trim();
+        hero.img = newImg.trim() || `https://placehold.co/76x76/2563eb/ffffff?text=${encodeURIComponent(hero.name)}`;
+        saveHeroStorage();
+    }
+
+    function deleteHeroFromStorage(id) {
+        if (!isAdminMode) return;
+        const hero = HeroStorage.find(h => h.id === id); if (!hero) return;
+        if (confirm(`⚠️ [경고] 정말로 스토리지에서 [ ${hero.name} ] 카드를 영구 삭제하시겠습니까?`)) {
+            HeroStorage = HeroStorage.filter(h => h.id !== id);
+            saveHeroStorage();
+        }
+    }
+
+    function pushHeroToBuilderField(heroName, target) {
+        if (target === 'enemy') {
+            if (selectedDeckId !== null) {
+                const deck = DecksData.find(d => d.id === selectedDeckId);
+                if (deck && hasPermission(deck)) {
+                    if (deck.status === '완파') { alert("❌ 완파 판정을 받은 성채의 방어덱 배치는 수정할 수 없습니다."); return; }
+                    let prevVal = deck.defender.trim();
+                    deck.defender = prevVal ? prevVal + " " + heroName : heroName;
+                    deck.defender = deck.defender.replace(/\s+/g, ' ');
+                    saveToStorage(); return;
+                }
+            }
+            const inputEl = document.getElementById('input-enemy-names');
+            if (inputEl) { let prevVal = inputEl.value.trim(); inputEl.value = prevVal ? prevVal + " " + heroName : heroName; }
+        } else {
+            const inputEl = document.getElementById('input-counter-names');
+            if (inputEl) { let prevVal = inputEl.value.trim(); inputEl.value = prevVal ? prevVal + " " + heroName : heroName; }
+        }
+    }
+
+    function getHeroHtmlCollection(spaceSeparatedNames) {
+        if (!spaceSeparatedNames || !spaceSeparatedNames.trim()) return '<span style="color:#64748b; font-size:11px;">지정 영웅 없음</span>';
+        let htmlResult = '<div class="jokbo-hero-flex">';
+        spaceSeparatedNames.split(' ').forEach(name => {
+            if (!name.trim()) return;
+            const matchedHero = HeroStorage.find(h => h.name === name.trim());
+            const imgSrc = matchedHero ? matchedHero.img : `https://placehold.co/48x48/334155/ffffff?text=${encodeURIComponent(name)}`;
+            htmlResult += `
+                <div class="jokbo-hero-mini" title="${name}">
+                    <img src="${imgSrc}" alt="${name}" onerror="this.src='https://placehold.co/48x48/1e293b/ffffff?text=?'">
+                    <div class="mini-name">${name}</div>
+                </div>`;
+        });
+        htmlResult += '</div>';
+        return htmlResult;
+    }
+
+    function editJokboRecord(id) {
+        if (!isAdminMode) { alert("❌ 족보 수정은 좌측 관리자 모드 잠금 해제 후 가능합니다."); return; }
+        const record = JokboData.find(j => j.id === id); if (!record) return;
+        const newEnemy = prompt("상대 방어덱 수정 (공백 구분):", record.enemy); if (newEnemy === null) return;
+        const newCounter = prompt("추천 공격 조합 수정 (공백 구분):", record.counter); if (newCounter === null) return;
+        const newTips = prompt("공략 팁 수정:", record.tips); if (newTips === null) return;
+        record.enemy = newEnemy.trim().replace(/\s+/g, ' ');
+        record.counter = newCounter.trim().replace(/\s+/g, ' ');
+        record.tips = newTips.trim();
+        saveJokbo();
+    }
+
+    function drawJokbo() {
+        const container = document.getElementById('jokbo-grid-container');
+        if (!container) return; container.innerHTML = '';
+        const keyword = document.getElementById('jokbo-search').value.toLowerCase().trim();
+        const filtered = JokboData.filter(j => (j.enemy && j.enemy.toLowerCase().includes(keyword)) || (j.counter && j.counter.toLowerCase().includes(keyword)));
+        if (filtered.length === 0) { container.innerHTML = `<div style="color:#64748b; font-size:13px; grid-column:1/-1; text-align:center; padding:30px;">검색 결과가 없습니다.</div>`; return; }
+        filtered.forEach(j => {
+            const enemyVisuals = getHeroHtmlCollection(j.enemy);
+            const counterVisuals = getHeroHtmlCollection(j.counter);
+            let editBtnHtml = isAdminMode ? `<button class="edit-btn" onclick="editJokboRecord(${j.id})">✏️수정</button>` : '';
+            container.innerHTML += `
+                <div class="jokbo-card">
+                    ${editBtnHtml}
+                    <button class="del-btn" onclick="deleteJokboRecord(${j.id})">✖</button>
+                    <div><span class="jokbo-tag tag-enemy">상대방어덱</span>${enemyVisuals}</div>
+                    <div><span class="jokbo-tag tag-counter">추천공격 조합</span>${counterVisuals}</div>
+                    <div style="color:#cbd5e1; font-size:12px; background:#1e293b; padding:8px; border-radius:6px; line-height:1.4; border-left: 3px solid #eab308; margin-top:2px;">💡 ${j.tips}</div>
+                    <div style="text-align:right; font-size:10px; color:#64748b;">작성자: ${j.author}</div>
+                </div>`;
+        });
+    }
+
+    function addJokboRecord() {
+        if (!currentUser) return;
+        const enemyString = document.getElementById('input-enemy-names').value.trim();
+        const counterString = document.getElementById('input-counter-names').value.trim();
+        const tips = document.getElementById('add-tips').value.trim();
+        if (!enemyString || !counterString) { alert("⚠️ 방어덱과 공격 조합에 1명 이상의 영웅을 기입해 주세요."); return; }
+        JokboData.push({ id: Date.now(), enemy: enemyString.replace(/\s+/g, ' '), counter: counterString.replace(/\s+/g, ' '), tips: tips || "특별한 팁 없음", author: currentUser });
+        saveJokbo();
+        document.getElementById('input-enemy-names').value = ''; document.getElementById('input-counter-names').value = ''; document.getElementById('add-tips').value = '';
+    }
+
+    function deleteJokboRecord(id) {
+        const record = JokboData.find(j => j.id === id); if (!record) return;
+        if (record.author !== currentUser && !isAdminMode && record.author !== "시스템") { alert("❌ 본인이 작성한 기록물만 파기할 수 있습니다."); return; }
+        if (confirm("해당 족보를 삭제할까요?")) { JokboData = JokboData.filter(j => j.id !== id); saveJokbo(); }
+    }
+
+    function updateLoginSelectOptions() {
+        const select = document.getElementById('login-username-select');
+        if (!select) return; select.innerHTML = '';
+        guildMembers.filter(m => m.name !== "").forEach(m => { select.innerHTML += `<option value="${m.name}">${m.name}</option>`; });
+    }
+
+    function checkAuthStatus() {
+        if (currentUser && getGuildMemberObj(currentUser)) {
+            document.getElementById('current-user-display').innerText = currentUser;
+            document.getElementById('custom-login-modal').style.display = 'none';
+        } else {
+            document.getElementById('custom-login-modal').style.display = 'flex';
+        }
+    }
+
+    function handleWebLogin() {
+        const nameInput = document.getElementById('login-username-select').value;
+        const pwInput = document.getElementById('login-password').value.trim();
+        const errorMsg = document.getElementById('login-error-msg');
+        const userObj = getGuildMemberObj(nameInput);
+        if (userObj) {
+            if (userObj.password === pwInput) {
+                currentUser = nameInput; localStorage.setItem('skr_current_user', currentUser);
+                document.getElementById('current-user-display').innerText = currentUser;
+                errorMsg.innerText = ""; document.getElementById('custom-login-modal').style.display = 'none';
+                if (pwInput === "0000") {
+                    setTimeout(() => {
+                        let newPw = prompt(`🔑 [${currentUser}]님의 커스텀 비밀번호를 새로 지정하세요:`);
+                        if (newPw && newPw.trim() !== "" && newPw.trim() !== "0000") { userObj.password = newPw.trim(); saveMembers(); alert("비번 변경 완료!"); }
+                    }, 100);
+                }
+            } else { errorMsg.innerText = "❌ 비밀번호가 틀렸습니다."; }
+        } else { errorMsg.innerText = "❌ 명단에 없는 길드원입니다."; }
+    }
+
+    function logout() { localStorage.removeItem('skr_current_user'); currentUser = ""; document.getElementById('login-password').value = ""; checkAuthStatus(); }
+
+    function drawSidebar() {
+        const container = document.getElementById('member-status-container');
+        if (!container) return; container.innerHTML = '';
+        guildMembers.forEach((m, idx) => {
+            const isMe = m.name === currentUser ? 'me' : '';
+            const isExhausted = m.tickets <= 0 ? 'exhausted' : '';
+            const isDisabled = !isAdminMode ? 'disabled' : '';
+            let badgeHtml = `<span class="status-badge avail">참가중</span>`;
+            if (m.name === "") { badgeHtml = `<span class="status-badge" style="color:#475569;">미등록</span>`; } 
+            else if (m.tickets <= 0) { badgeHtml = `<span class="status-badge empty">소진</span>`; }
+            let pwInputHtml = '';
+            if (isAdminMode && m.name !== "") {
+                pwInputHtml = `
+                    <div class="stat-item">
+                        <span style="color:#a78bfa;">PW:</span>
+                        <input type="password" class="input-user-pw" value="${m.password || '0000'}" onchange="updateMemberPassword(${idx}, this.value)">
+                    </div>`;
+            }
+            container.innerHTML += `
+                <div class="member-row ${isMe} ${isExhausted}">
+                    <input type="text" class="input-name" value="${m.name}" placeholder="[비어있음]" ${isDisabled} onchange="updateMemberName(${idx}, this.value)">
+                    <div class="stat-group">
+                        ${pwInputHtml}
+                        <div class="stat-item"><span style="color:#94a3b8;">티켓:</span><input type="number" class="input-stat t-count" value="${m.tickets}" min="0" max="5" ${isDisabled} onchange="updateMemberStat(${idx}, 'tickets', this.value)"></div>
+                        <div class="stat-item"><span style="color:#38bdf8;">완파:</span><input type="number" class="input-stat s-count" value="${m.success || 0}" min="0" ${isDisabled} onchange="updateMemberStat(${idx}, 'success', this.value)"></div>
+                        <div class="stat-item"><span style="color:#f97316;">실패:</span><input type="number" class="input-stat f-count" value="${m.fail || 0}" min="0" ${isDisabled} onchange="updateMemberStat(${idx}, 'fail', this.value)"></div>
+                    </div>
+                    ${badgeHtml}
+                </div>`;
+        });
+    }
+
+    function addGuildMemberSlot() {
+        if (!isAdminMode) { alert("❌ 권한 거부: 관리자 비번 인증이 필요합니다."); return; }
+        guildMembers.push({ name: "", password: "0000", tickets: 5, success: 0, fail: 0 });
+        saveMembers();
+    }
+
+    function updateMemberName(index, value) { guildMembers[index].name = value.trim(); if (guildMembers[index].name !== "" && !guildMembers[index].password) { guildMembers[index].password = "0000"; } saveMembers(); }
+    function updateMemberPassword(index, value) { guildMembers[index].password = value.trim() || "0000"; saveMembers(); }
+    function updateMemberStat(index, field, value) { guildMembers[index][field] = Math.max(0, parseInt(value) || 0); saveMembers(); }
+    function getGuildMemberObj(name) { return guildMembers.find(m => m.name !== "" && m.name === name); }
+
+    function checkPassword(inputPw) {
+        const lockIcon = document.getElementById('lock-icon');
+        if (inputPw === REAL_ADMIN_PASSWORD) {
+            lockIcon.innerText = "🔓 편집 모드 활성화"; lockIcon.className = "lock-status unlocked"; isAdminMode = true;
+        } else {
+            lockIcon.innerText = "🔒 명단 편집 잠김"; lockIcon.className = "lock-status locked"; isAdminMode = false;
+        }
+        drawSidebar(); drawHeroStorage(); drawJokbo();
+    }
+
+    function resetAllDecks() {
+        if (!isAdminMode) {
+            alert("❌ 권한 거부: 전체 초기화 기능은 좌측 [관리자 비번 인증] 후에만 사용할 수 있습니다.");
+            return;
+        }
+        
+        if (confirm("⚠️ [경고] 새 시즌 초기화를 진행하시겠습니까?\n\n- 방어덱 영웅, 공격자 기록, 실패횟수가 비워집니다.\n- 길드원 현황판 횟수(티켓 5장, 완파/실패 0회)가 초기화됩니다.\n\n(참고: 명단/비번과 성채 소유자는 그대로 유지됩니다.)")) {
+            
+            DecksData.forEach(d => {
+                d.status = '대기중';
+                d.attacker = '';
+                d.failCount = 0;
+                d.defender = ''; 
+            });
+            
+            guildMembers.forEach(m => {
+                if (m.name !== "") {
+                    m.tickets = 5;
+                    m.success = 0;
+                    m.fail = 0;
+                }
+            });
+
+            // 통합 트랜잭션 성격의 set 처리
+            db.ref('guildData').set({
+                members: guildMembers,
+                decks: DecksData,
+                jokbo: JokboData,
+                heroStorage: HeroStorage
+            }).then(() => {
+                alert("✅ 새 시즌 맞이 전체 데이터가 성공적으로 동기화 초기화되었습니다.");
+            });
+        }
+    }
+
+    function hasPermission(deck) { return deck.attacker === "" || deck.attacker === currentUser || isAdminMode; }
+
+    function selectDeckForStorage(id) {
+        if (selectedDeckId === id) { selectedDeckId = null; } 
+        else { selectedDeckId = id; }
+        drawDecks();
+    }
+
+    function drawDecks() {
+        const grid = document.getElementById('deck-grid');
+        if (!grid) return; grid.innerHTML = '';
+        document.getElementById('current-castle-title').innerText = `${currentCastle} 방어덱 배치 상황`;
+
+        const filtered = DecksData.filter(d => d.castleName === currentCastle);
+        filtered.forEach(d => {
+            let cardClass = 'card', badgeClass = 'badge ready', actionHtml = '', attackerContent = `<span class="name-text" style="color:#64748b;">공격 없음</span>`;
+            const isInputDisabled = !hasPermission(d) ? 'disabled' : '';
+            const isSelected = d.id === selectedDeckId;
+            if (isSelected) { cardClass += ' selected-deck-target'; }
+
+            const defenderVisuals = getHeroHtmlCollection(d.defender);
+            let selectTargetBtn = !isInputDisabled ? `<button onclick="selectDeckForStorage(${d.id})" style="background:${isSelected ? '#0284c7':'#334155'}; border: 1px solid ${isSelected?'#38bdf8':'#475569'}; color:white; font-size:11px; padding:3px 8px; border-radius:4px; cursor:pointer; font-weight:bold; white-space:nowrap;">${isSelected ? '🎯 선택됨' : '📍 선택'}</button>` : '';
+
+            let defenderContent = `
+                <div style="display:flex; flex-direction:column; gap:6px; width:100%;">
+                    <div style="display:flex; gap:4px; align-items:center; width:100%;">
+                        <input type="text" class="input-defender" placeholder="방어덱 영웅" value="${d.defender || ''}" ${isInputDisabled} onchange="updateDefender(${d.id}, this.value)" style="flex:1; width:100px;">
+                        ${selectTargetBtn}
+                    </div>
+                    <div style="width:100%;">${defenderVisuals}</div>
+                </div>`;
+            
+            let ownerContent = `<input type="text" class="input-owner" placeholder="소유자 이름" value="${d.owner || ''}" ${isInputDisabled} onchange="updateOwner(${d.id}, this.value)" style="width:100%; box-sizing:border-box;">`;
+
+            if (d.status === '완파') {
+                defenderContent = `<div style="display:flex; flex-direction:column; gap:4px; width:100%;"><span class="name-text" style="color:#64748b; text-decoration:line-through; font-size:13px;">${d.defender || '미등록'}</span><div style="width:100%; opacity:0.5;">${defenderVisuals}</div></div>`;
+                ownerContent = `<span style="font-size:13px; color:#64748b; font-weight:bold;">${d.owner || '미지정'}</span>`;
+            }
+
+            if (d.status === '대기중') {
+                actionHtml = `<button class="btn" onclick="book(${d.id})">참전 예약</button>`;
+            } else if (d.status === '예약됨') {
+                badgeClass = 'badge ing'; cardClass += ' reserved';
+                attackerContent = `<span class="name-text" style="color:#facc15;">⚡ ${d.attacker} 선점</span>`;
+                if (hasPermission(d)) {
+                    actionHtml = `<div class="btn-group-3"><button class="btn-3 btn-success" onclick="useTicketAndChangeState(${d.id}, '완파')">완파</button><button class="btn-3 btn-failure" onclick="useTicketAndChangeState(${d.id}, '공격실패')">실패</button><button class="btn-3 btn-cancel" onclick="changeState(${d.id}, '대기중')">취소</button></div>`;
+                } else { actionHtml = `<button class="btn" style="background:#334155; color:#94a3b8; cursor:not-allowed;" disabled>🔒 다른 멤버 예약 중</button>`; }
+            } else if (d.status === '공격실패') {
+                badgeClass = 'badge fail'; cardClass += ' fail';
+                attackerContent = `<span class="name-text" style="color:#f97316;">❌ 패배: ${d.attacker}</span>`;
+                actionHtml = `<button class="btn" style="background-color:#ea580c;" onclick="book(${d.id})">재도전 예약</button>`;
+            } else if (d.status === '완파') {
+                badgeClass = 'badge done'; cardClass += ' done';
+                attackerContent = `<span class="name-text" style="color:#f43f5e;">💥 정복자: ${d.attacker}</span>`;
+                actionHtml = `<button class="btn" style="background:#334155;" onclick="resetDeck(${d.id})">초기화</button>`;
+            }
+
+            grid.innerHTML += `
+                <div class="${cardClass}">
+                    <div>
+                        <div class="card-header"><span class="castle-name">${d.deckNum}</span><span class="${badgeClass}">${d.status}</span></div>
+                        <div class="info-row"><span class="info-label">👤 소유자</span>${ownerContent}</div>
+                        <div class="info-row"><span class="info-label">🛡️ 방어배치</span>${defenderContent}</div>
+                        <div class="info-row"><span class="info-label">⚔️ 공격담당</span>${attackerContent}</div>
+                        <div class="info-row"><span class="info-label">⚠️ 누적 실패</span><input type="number" class="input-failcount" value="${d.failCount || 0}" min="0" ${isInputDisabled} onchange="updateFailCount(${d.id}, this.value)"></div>
+                    </div>
+                    ${actionHtml}
+                </div>`;
+        });
+    }
+
+    function updateDefender(id, value) { const deck = DecksData.find(d => d.id === id); if (!hasPermission(deck)) return; deck.defender = value; saveToStorage(); }
+    function updateOwner(id, value) { const deck = DecksData.find(d => d.id === id); if (!hasPermission(deck)) return; deck.owner = value.trim(); saveToStorage(); }
+    function updateFailCount(id, value) { const deck = DecksData.find(d => d.id === id); if (!hasPermission(deck)) return; deck.failCount = parseInt(value) || 0; saveToStorage(); }
+    
+    function book(id) {
+        if (!currentUser) return;
+        const userObj = getGuildMemberObj(currentUser);
+        if (userObj && userObj.tickets <= 0) { alert("❌ 소지한 길드전 티켓을 모두 소진했습니다!"); return; }
+        const deck = DecksData.find(d => d.id === id); if (deck.status === '예약됨') return;
+        deck.status = '예약됨'; deck.attacker = currentUser; saveToStorage();
+    }
+    
+    function useTicketAndChangeState(id, nextStatus) {
+        const deck = DecksData.find(d => d.id === id); if (!hasPermission(deck)) return;
+        const userObj = guildMembers.find(m => m.name === deck.attacker);
+        if (userObj) {
+            userObj.tickets = Math.max(0, userObj.tickets - 1);
+            if (nextStatus === '완파') { userObj.success = (userObj.success || 0) + 1; } 
+            else if (nextStatus === '공격실패') { userObj.fail = (userObj.fail || 0) + 1; }
+        }
+        deck.status = nextStatus;
+        if (nextStatus === '공격실패') deck.failCount = (deck.failCount || 0) + 1;
+        
+        saveMembers(); 
+        saveToStorage();
+    }
+    
+    function changeState(id, status) { const deck = DecksData.find(d => d.id === id); if (!hasPermission(deck)) return; deck.status = status; if (status === '대기중') deck.attacker = ''; saveToStorage(); }
+    function resetDeck(id) { const deck = DecksData.find(d => d.id === id); deck.status = '대기중'; deck.attacker = ''; deck.failCount = 0; saveToStorage(); }
+    
+    function switchCastle(castleName) {
+        currentCastle = castleName; selectedDeckId = null; 
+        const buttons = document.querySelectorAll('.tab-btn');
+        buttons.forEach(btn => { btn.classList.remove('active'); if(btn.innerText === castleName || (castleName === '본성' && btn.innerText.includes('본성'))) { btn.classList.add('active'); } });
+        drawDecks();
+    }
+</script>
+</body>
+</html>
