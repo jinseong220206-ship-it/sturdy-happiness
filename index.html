@@ -762,19 +762,10 @@
             }
 
             if (d.status === '대기중') {
-                // 공격 실패 후 다시 예약 대기 상태가 된 경우 (누적 실패가 1 이상일 때)
-                if (parseInt(d.failCount || 0) > 0) {
-                    badgeClass = 'badge fail'; cardClass += ' fail';
-                    attackerContent = `<span class="name-text" style="color:#f97316;">❌ 공격 실패 (대기중)</span>`;
-                    actionHtml = canUseControls
-                        ? `<button class="btn" style="background-color:#ea580c;" onclick="book(${d.id})">재도전 예약</button>`
-                        : `<button class="btn" style="background:#334155; color:#94a3b8; cursor:not-allowed;" disabled>티켓 소진</button>`;
-                } else {
-                    badgeClass = 'badge ready';
-                    actionHtml = canUseControls
-                        ? `<button class="btn" onclick="book(${d.id})">참전 예약</button>`
-                        : `<button class="btn" style="background:#334155; color:#94a3b8; cursor:not-allowed;" disabled>티켓 소진</button>`;
-                }
+                badgeClass = 'badge ready';
+                actionHtml = canUseControls
+                    ? `<button class="btn" onclick="book(${d.id})">참전 예약</button>`
+                    : `<button class="btn" style="background:#334155; color:#94a3b8; cursor:not-allowed;" disabled>티켓 소진</button>`;
             } else if (d.status === '예약됨') {
                 badgeClass = 'badge ing'; cardClass += ' reserved';
                 attackerContent = `<span class="name-text" style="color:#facc15;">⚡ ${d.attacker} 선점</span>`;
@@ -794,7 +785,7 @@
             grid.innerHTML += `
                 <div class="${cardClass}">
                     <div>
-                        <div class="card-header"><span class="castle-name">${d.deckNum}</span><span class="${badgeClass}">${d.status === '대기중' && parseInt(d.failCount || 0) > 0 ? '공격실패' : d.status}</span></div>
+                        <div class="card-header"><span class="castle-name">${d.deckNum}</span><span class="${badgeClass}">${d.status}</span></div>
                         <div class="info-row"><span class="info-label">👤 소유자</span>${ownerContent}</div>
                         <div class="info-row"><span class="info-label">🛡️ 방어배치</span>${defenderContent}</div>
                         <div class="info-row"><span class="info-label">⚔️ 공격담당</span>${attackerContent}</div>
