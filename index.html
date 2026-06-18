@@ -174,7 +174,6 @@
         
         #custom-login-modal { position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(15,23,42,0.98); display:none; justify-content:center; align-items:center; z-index:99999; }
         .login-box { background:#1e293b; padding:30px; border-radius:12px; border:2px solid #2563eb; width:340px; text-align:center; box-shadow:0 10px 25px rgba(0,0,0,0.5); }
-        .login-box { background:#1e293b; padding:30px; border-radius:12px; border:2px solid #2563eb; width:340px; text-align:center; box-shadow:0 10px 25px rgba(0,0,0,0.5); }
         .login-field { margin-bottom:15px; text-align:left; }
         .login-field label { font-size:12px; color:#94a3b8; display:block; margin-bottom:6px; }
         .login-field select, .login-field input { width:100%; box-sizing:border-box; padding:10px; font-size:14px; }
@@ -308,7 +307,6 @@
     let JokboData = [];
     let HeroStorage = []; 
     
-    // 접속 유저는 기기 고유 상태이므로 로컬스토리지 유지
     let currentUser = localStorage.getItem('skr_current_user') || "";
 
     const DEFAULT_HERO_NAMES = [
@@ -332,12 +330,10 @@
         ];
     }
 
-    // Firebase 데이터베이스 실시간 구독 로드 함수
     function loadFirebaseDatabase() {
         db.ref('guildData').on('value', (snapshot) => {
             const data = snapshot.val() || {};
             
-            // 1. 멤버 정보 로드 및 검증
             guildMembers = data.members || [];
             if (!Array.isArray(guildMembers) || guildMembers.length === 0) {
                 guildMembers = Array(30).fill(null).map(() => ({ name: "", password: "0000", tickets: 5, success: 0, fail: 0 }));
@@ -345,17 +341,14 @@
             }
             guildMembers.forEach(m => { if(m.fail === undefined) m.fail = 0; });
 
-            // 2. 덱 정보 로드
             DecksData = data.decks || [];
             if (!Array.isArray(DecksData) || DecksData.length === 0) { 
                 DecksData = generateInitialDecks();
             }
 
-            // 3. 족보 정보 로드
             JokboData = data.jokbo || [];
             if (!Array.isArray(JokboData)) { JokboData = generateInitialJokbo(); }
 
-            // 4. 영웅 스토리지 로드
             HeroStorage = data.heroStorage || [];
             if (!Array.isArray(HeroStorage) || HeroStorage.length === 0 || typeof HeroStorage[0] === 'string') {
                 HeroStorage = DEFAULT_HERO_NAMES.map((name, idx) => ({
@@ -365,7 +358,6 @@
                 }));
             }
 
-            // 모든 데이터 동기화 완료 후 UI 업데이트
             document.getElementById('loading-screen').style.display = 'none';
             drawSidebar();
             drawDecks();
@@ -379,7 +371,6 @@
         });
     }
 
-    // 데이터 쓰기 명령 함수들
     function saveMembers() { db.ref('guildData/members').set(guildMembers); }
     function saveToStorage() { db.ref('guildData/decks').set(DecksData); }
     function saveJokbo() { db.ref('guildData/jokbo').set(JokboData); }
@@ -771,9 +762,19 @@
             }
 
             if (d.status === '대기중') {
-                actionHtml = canUseControls
-                    ? `<button class="btn" onclick="book(${d.id})">참전 예약</button>`
-                    : `<button class="btn" style="background:#334155; color:#94a3b8; cursor:not-allowed;" disabled>티켓 소진</button>`;
+                // 공격 실패 후 다시 예약 대기 상태가 된 경우 (누적 실패가 1 이상일 때)
+                if (parseInt(d.failCount || 0) > 0) {
+                    badgeClass = 'badge fail'; cardClass += ' fail';
+                    attackerContent = `<span class="name-text" style="color:#f97316;">❌ 공격 실패 (대기중)</span>`;
+                    actionHtml = canUseControls
+                        ? `<button class="btn" style="background-color:#ea580c;" onclick="book(${d.id})">재도전 예약</button>`
+                        : `<button class="btn" style="background:#334155; color:#94a3b8; cursor:not-allowed;" disabled>티켓 소진</button>`;
+                } else {
+                    badgeClass = 'badge ready';
+                    actionHtml = canUseControls
+                        ? `<button class="btn" onclick="book(${d.id})">참전 예약</button>`
+                        : `<button class="btn" style="background:#334155; color:#94a3b8; cursor:not-allowed;" disabled>티켓 소진</button>`;
+                }
             } else if (d.status === '예약됨') {
                 badgeClass = 'badge ing'; cardClass += ' reserved';
                 attackerContent = `<span class="name-text" style="color:#facc15;">⚡ ${d.attacker} 선점</span>`;
@@ -782,10 +783,6 @@
                         ? `<div class="btn-group-3"><button class="btn-3 btn-success" onclick="useTicketAndChangeState(${d.id}, '완파')">완파</button><button class="btn-3 btn-failure" onclick="useTicketAndChangeState(${d.id}, '공격실패')">실패</button><button class="btn-3 btn-cancel" onclick="changeState(${d.id}, '대기중')">취소</button></div>`
                         : `<button class="btn" style="background:#334155; color:#94a3b8; cursor:not-allowed;" disabled>티켓 소진</button>`;
                 } else { actionHtml = `<button class="btn" style="background:#334155; color:#94a3b8; cursor:not-allowed;" disabled>🔒 다른 멤버 예약 중</button>`; }
-            } else if (d.status === '공격실패') {
-                badgeClass = 'badge fail'; cardClass += ' fail';
-                attackerContent = `<span class="name-text" style="color:#f97316;">❌ 패배: ${d.attacker}</span>`;
-                actionHtml = `<button class="btn" style="background-color:#ea580c;" onclick="book(${d.id})">재도전 예약</button>`;
             } else if (d.status === '완파') {
                 badgeClass = 'badge done'; cardClass += ' done';
                 attackerContent = `<span class="name-text" style="color:#f43f5e;">💥 정복자: ${d.attacker}</span>`;
@@ -797,7 +794,7 @@
             grid.innerHTML += `
                 <div class="${cardClass}">
                     <div>
-                        <div class="card-header"><span class="castle-name">${d.deckNum}</span><span class="${badgeClass}">${d.status}</span></div>
+                        <div class="card-header"><span class="castle-name">${d.deckNum}</span><span class="${badgeClass}">${d.status === '대기중' && parseInt(d.failCount || 0) > 0 ? '공격실패' : d.status}</span></div>
                         <div class="info-row"><span class="info-label">👤 소유자</span>${ownerContent}</div>
                         <div class="info-row"><span class="info-label">🛡️ 방어배치</span>${defenderContent}</div>
                         <div class="info-row"><span class="info-label">⚔️ 공격담당</span>${attackerContent}</div>
@@ -865,12 +862,16 @@
             }
         }
         
-        deck.status = nextStatus;
+        // 차이점 분기 처리: 공격실패 시 성채를 '대기중'으로 복구하고 공격 선점자를 비워서 재예약 유도
         if (nextStatus === '공격실패') {
-            deck.failCount = parseInt(deck.failCount || 0) + 1;
+            deck.status = '대기중';
+            deck.attacker = ''; // 선점자 비우기
+            deck.failCount = parseInt(deck.failCount || 0) + 1; // 성채 실패 수 증가
+        } else {
+            deck.status = nextStatus;
         }
         
-        // 원자적(Atomic) 통합 업데이트로 데이터가 유실되는 레이스 컨디션 방지
+        // Atomic Update로 동시 데이터 연동 유실 차단
         db.ref('guildData').update({
             members: guildMembers,
             decks: DecksData
